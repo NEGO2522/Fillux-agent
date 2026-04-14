@@ -17,15 +17,15 @@ const CONTACT_ITEMS = [
   {
     icon: "✉️",
     label: "Email",
-    value: "support@autofill-agent.dev",
+    value: "support@fillux.dev",
     href: "mailto:2024btechaimlkshitij18489@poornima.edu.in",
     desc: "We reply within 24 hours",
   },
   {
     icon: "🐙",
     label: "GitHub",
-    value: "github.com/autofill-agent",
-    href: "https://github.com/NEGO2522/autofill-agent",
+    value: "github.com/fillux",
+    href: "https://github.com/NEGO2522/fillux-agent",
     desc: "Open an issue or PR",
   },
 ];
@@ -44,7 +44,7 @@ function Field({ label, required, children }) {
         {required && <span style={{ color: "rgba(255,255,255,0.18)", marginLeft: 2 }}>*</span>}
       </label>
       {children}
-    </div>
+    </div>      
   );
 }
 

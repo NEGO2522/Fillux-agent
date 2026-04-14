@@ -1,9 +1,6 @@
 import { useNavigate } from "react-router-dom";
-import { signOut } from "firebase/auth";
-import { auth } from "../firebase/firebase";
+import { supabase } from "../firebase/firebase";
 import { useState, useEffect } from "react";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "../firebase/firebase";
 
 const S = {
   bg:      "#080808",
@@ -48,11 +45,19 @@ const CSS = `
 
 export default function Home() {
   const navigate = useNavigate();
-  const user = auth.currentUser;
-  const firstName = user?.displayName?.split(" ")[0] || null;
+  const [user, setUser] = useState(null);
+  const [firstName, setFirstName] = useState(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      const name = session?.user?.user_metadata?.full_name || session?.user?.email || null;
+      setFirstName(name ? name.split(" ")[0] : null);
+    });
+  }, []);
 
   const handleLogout = async () => {
-    await signOut(auth);
+    await supabase.auth.signOut();
     navigate("/");
   };
 
@@ -66,15 +71,18 @@ export default function Home() {
 
     setFilling(true);
     try {
-      // 1. Get current tab
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (!tab) throw new Error("No active tab found.");
 
-      // 2. Get profile from Firestore
-      const snap = await getDoc(doc(db, "profiles", auth.currentUser.uid));
-      if (!snap.exists()) throw new Error("Please complete your profile first!");
-      
-      const profileData = snap.data();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) throw new Error("Not logged in.");
+
+      const { data: profileData, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("uid", session.user.id)
+        .single();
+      if (error || !profileData) throw new Error("Please complete your profile first!");
 
       // 3. Send message to content.js
       chrome.tabs.sendMessage(tab.id, { 
@@ -151,7 +159,7 @@ export default function Home() {
             alignItems: "center", justifyContent: "center",
             fontSize: "0.8125rem", fontWeight: 900,
           }}>⚡</div>
-          <span style={{ fontSize: "0.9375rem", fontWeight: 700, letterSpacing: "-0.02em" }}>Fillux</span>
+          <span style={{ fontSize: "0.9375rem", fontWeight: 700, letterSpacing: "-0.02em", fontFamily: "'Comic Sans MS', 'Comic Sans', cursive" }}>Fillux</span>
         </div>
 
         {/* Right side */}

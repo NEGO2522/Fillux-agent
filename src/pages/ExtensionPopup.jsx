@@ -1,12 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { auth, db } from "../firebase/firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
-import {
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  onAuthStateChanged,
-  signOut,
-} from "firebase/auth";
+import { supabase } from "../firebase/firebase";
 
 /* ══════════════════════════════════════════════════════
    DESIGN TOKENS
@@ -329,13 +322,16 @@ export default function ExtensionPopup() {
 
   /* ── Auth listener ── */
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
+    const loadUser = async (u) => {
       if (!u) { setUser(null); setView("auth"); return; }
       setUser(u);
       try {
-        const snap = await getDoc(doc(db, "profiles", u.uid));
-        if (snap.exists()) {
-          const data = snap.data();
+        const { data } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("uid", u.id)
+          .single();
+        if (data) {
           setProfile(data);
           setProfData(prev => ({ ...prev, ...data }));
           if (data.resumeURL) setResumeURL(data.resumeURL);
@@ -347,8 +343,17 @@ export default function ExtensionPopup() {
       } catch {
         setView("profile-setup");
       }
+    };
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      loadUser(session?.user ?? null);
     });
-    return unsub;
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      loadUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   /* ── Auth submit ── */
@@ -356,14 +361,15 @@ export default function ExtensionPopup() {
     if (!authEmail || !authPass) { setAuthErr("Email and password required."); return; }
     setAuthBusy(true); setAuthErr("");
     try {
+      let result;
       if (authMode === "login") {
-        await signInWithEmailAndPassword(auth, authEmail, authPass);
+        result = await supabase.auth.signInWithPassword({ email: authEmail, password: authPass });
       } else {
-        await createUserWithEmailAndPassword(auth, authEmail, authPass);
+        result = await supabase.auth.signUp({ email: authEmail, password: authPass });
       }
+      if (result.error) throw result.error;
     } catch (e) {
-      const raw = e.code?.replace("auth/", "").replace(/-/g, " ") || "Auth failed";
-      setAuthErr(raw.charAt(0).toUpperCase() + raw.slice(1) + ".");
+      setAuthErr(e.message || "Auth failed.");
     } finally {
       setAuthBusy(false);
     }
@@ -390,7 +396,6 @@ export default function ExtensionPopup() {
     try {
       let finalResumeURL = resumeURL;
 
-      // Upload resume if a new file was chosen
       if (resumeFile && CLOUDINARY_CLOUD_NAME && CLOUDINARY_UPLOAD_PRESET) {
         setResumeUploading(true);
         try {
@@ -406,31 +411,34 @@ export default function ExtensionPopup() {
         setResumeUploading(false);
       }
 
+      const { data: { session } } = await supabase.auth.getSession();
+      const uid = session?.user?.id;
+      const email = session?.user?.email || profData.email;
+
       const payload = {
         ...profData,
         yesNoFields,
         resumeURL: finalResumeURL || "",
         termsAccepted: true,
-        uid: user.uid,
-        email: user.email || profData.email,
+        uid,
+        email,
         updatedAt: new Date().toISOString(),
       };
-      await setDoc(doc(db, "profiles", user.uid), payload);
+
+      const { error } = await supabase
+        .from("profiles")
+        .upsert(payload, { onConflict: "uid" });
+      if (error) throw error;
+
       setProfile(payload);
       setProfSaved(true);
 
-      // ── Click the "Next" button on the active page ──
       try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tab) {
-          chrome.tabs.sendMessage(tab.id, { action: "FILLUX_CLICK_NEXT" }, () => {});
-        }
+        if (tab) chrome.tabs.sendMessage(tab.id, { action: "FILLUX_CLICK_NEXT" }, () => {});
       } catch (_) {}
 
-      setTimeout(() => {
-        setProfSaved(false);
-        setView("ready");
-      }, 1200);
+      setTimeout(() => { setProfSaved(false); setView("ready"); }, 1200);
     } catch (e) {
       setProfErr("Save failed: " + e.message);
     } finally {
@@ -455,7 +463,7 @@ export default function ExtensionPopup() {
 
   /* ── Sign out ── */
   const handleSignOut = async () => {
-    await signOut(auth);
+    await supabase.auth.signOut();
     setProfile(null); setFillResult(null);
     setProfData({ ...EMPTY }); setResumeURL(""); setResumeFile(null);
     setYesNoFields({ firstHackathon: "", teamFormed: "", dietaryNeeds: "" });
@@ -502,7 +510,7 @@ export default function ExtensionPopup() {
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: "0.8125rem", fontWeight: 900, flexShrink: 0,
           }}>⚡</div>
-          <span style={{ fontSize: "0.9375rem", fontWeight: 800, letterSpacing: "-0.02em" }}>Fillux</span>
+          <span style={{ fontSize: "0.9375rem", fontWeight: 800, letterSpacing: "-0.02em", fontFamily: "'Comic Sans MS', 'Comic Sans', cursive" }}>Fillux</span>
         </div>
         {user && (
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
@@ -577,7 +585,7 @@ export default function ExtensionPopup() {
           </p>
 
           <div style={{ marginTop: "auto", paddingTop: "0.5rem", borderTop: `1px solid ${T.border}`, textAlign: "center" }}>
-            <button onClick={() => window.open("https://autofill-agent.vercel.app", "_blank")}
+            <button onClick={() => window.open("https://fillux.vercel.app", "_blank")}
               style={{ background: "none", border: "none", color: "rgba(255,255,255,0.2)", fontSize: "0.6875rem", cursor: "pointer", fontFamily: T.font }}>
               Open full dashboard ↗
             </button>
@@ -691,12 +699,12 @@ export default function ExtensionPopup() {
               </div>
               <p style={{ margin: 0, fontSize: "0.6875rem", color: "rgba(255,255,255,0.45)", lineHeight: 1.5 }}>
                 I agree to the{" "}
-                <button onClick={e => { e.stopPropagation(); window.open("https://autofill-agent.vercel.app/terms", "_blank"); }}
+                <button onClick={e => { e.stopPropagation(); window.open("https://fillux.vercel.app/terms", "_blank"); }}
                   style={{ background: "none", border: "none", color: T.accent, cursor: "pointer", padding: 0, fontFamily: T.font, fontSize: "inherit", textDecoration: "underline" }}>
                   Terms & Conditions
                 </button>
                 {" "}and{" "}
-                <button onClick={e => { e.stopPropagation(); window.open("https://autofill-agent.vercel.app/privacy", "_blank"); }}
+                <button onClick={e => { e.stopPropagation(); window.open("https://fillux.vercel.app/privacy", "_blank"); }}
                   style={{ background: "none", border: "none", color: T.accent, cursor: "pointer", padding: 0, fontFamily: T.font, fontSize: "inherit", textDecoration: "underline" }}>
                   Privacy Policy
                 </button>

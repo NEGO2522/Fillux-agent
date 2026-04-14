@@ -1,34 +1,47 @@
 # Fillux
 
-**Fillux** is a profile management platform built with React, Tailwind CSS, and Firebase. It allows you to store your personal, academic, and document details once, so they can be securely accessed when filling out forms or applications.
+**Fillux** is a profile management web application that lets you store your personal, academic, and document details once — and access them instantly whenever you need to fill out forms or applications.
+
+Built with **React**, **Tailwind CSS**, **Firebase**, and **Cloudinary**.
 
 ---
 
-## 🚀 Key Flow
+## Overview
 
-1. **Landing Page** — Introduces the "Fillux" ecosystem.
-2. **Authentication** — Sign in or create an account via Firebase Auth (Google Auth supported).
-3. **Profile Setup (`Form.jsx`)** — Complete your profile including personal data, college details, and document uploads.
-4. **Cloudinary Integration** — Resumes and Photo IDs are stored securely on Cloudinary.
-5. **Dashboard (`Home.jsx`)** — Overview of your profile and links to the Chrome Extension.
+Filling out the same information repeatedly across job applications, college forms, and registrations is tedious. Fillux solves this by giving you a single, secure profile that stores everything — so your data is always ready when you need it.
 
 ---
 
-## ✨ Features
+## Features
 
-- **Profile Storage** — Store your name, email, phone, college details, and more in **Firebase Firestore**.
-- **Document Management** — Upload your Resume and College ID to **Cloudinary**.
-- **Modern UI** — A premium, dark-themed interface built with **Tailwind CSS**.
-- **Responsive Design** — Fully optimized for desktop and mobile.
-- **Secure Auth** — Managed by **Firebase Authentication**.
+- **Centralized Profile** — Store personal details, academic information, and contact data in one place via Firebase Firestore.
+- **Document Management** — Upload and manage your Resume and College ID securely through Cloudinary.
+- **Google Authentication** — Sign in quickly and securely using Firebase Authentication with Google OAuth support.
+- **Chrome Extension Support** — Access your profile data directly from the browser via the Fillux Chrome Extension.
+- **Responsive UI** — Clean, dark-themed interface built with Tailwind CSS, optimized for both desktop and mobile.
 
 ---
 
-## 🛠️ Getting Started
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React 19, React Router DOM |
+| Styling | Tailwind CSS v4 |
+| Auth & Database | Firebase Authentication, Firestore |
+| File Storage | Cloudinary |
+| Build Tool | Vite |
+| Deployment | Vercel |
+
+---
+
+## Getting Started
 
 ### Prerequisites
 
-Make sure you have **Node.js** installed on your machine.
+- [Node.js](https://nodejs.org/) v18 or higher
+- A Firebase project with Firestore and Authentication enabled
+- A Cloudinary account with an upload preset configured
 
 ### 1. Clone the Repository
 
@@ -45,55 +58,87 @@ npm install
 
 ### 3. Configure Environment Variables
 
-Create a `.env` file in the root directory:
+Create a `.env` file in the root directory and add the following:
 
 ```env
-# Firebase Config
-VITE_FIREBASE_API_KEY=your_apiKey
-VITE_FIREBASE_AUTH_DOMAIN=your_authDomain
-VITE_FIREBASE_PROJECT_ID=your_projectId
-VITE_FIREBASE_STORAGE_BUCKET=your_storageBucket
-VITE_FIREBASE_MESSAGING_SENDER_ID=your_messagingSenderId
-VITE_FIREBASE_APP_ID=your_appId
-VITE_FIREBASE_MEASUREMENT_ID=your_measurementId
+# Firebase
+VITE_FIREBASE_API_KEY=your_api_key
+VITE_FIREBASE_AUTH_DOMAIN=your_auth_domain
+VITE_FIREBASE_PROJECT_ID=your_project_id
+VITE_FIREBASE_STORAGE_BUCKET=your_storage_bucket
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
+VITE_FIREBASE_APP_ID=your_app_id
+VITE_FIREBASE_MEASUREMENT_ID=your_measurement_id
 
-# Cloudinary Config
+# Cloudinary
 VITE_CLOUDINARY_CLOUD_NAME=your_cloud_name
 VITE_CLOUDINARY_UPLOAD_PRESET=your_upload_preset
 ```
 
-### 4. Run the Project
+### 4. Start the Development Server
 
 ```bash
 npm run dev
 ```
 
-Open your browser and visit `http://localhost:5173`
+Visit `http://localhost:5173` in your browser.
+
+### 5. Build for Production
+
+```bash
+npm run build
+```
 
 ---
 
-## 🏗️ Project Structure
+## Project Structure
 
 ```
 fillux/
+├── public/                  # Static assets
 ├── src/
-│   ├── components/    # Reusable UI components
-│   ├── contexts/      # AuthContext to manage user state
-│   ├── firebase/      # Firebase initialization & config
-│   ├── pages/         # Main pages (Landing, Login, Home, Form)
-│   ├── App.jsx        # Routing configuration
-│   └── main.jsx       # Entry point
-├── public/
+│   ├── assets/              # Images and icons
+│   ├── components/          # Reusable UI components
+│   │   ├── Contact.jsx
+│   │   └── ProfileIcon.jsx
+│   ├── contexts/            # React context providers
+│   ├── firebase/            # Firebase initialization and config
+│   ├── pages/               # Application pages
+│   │   ├── Home.jsx         # Dashboard
+│   │   ├── Login.jsx        # Authentication
+│   │   ├── Form.jsx         # Profile setup
+│   │   ├── ExtensionPopup.jsx  # Chrome extension interface
+│   │   └── Privacy.jsx      # Privacy policy
+│   ├── App.jsx              # Route configuration
+│   └── main.jsx             # Application entry point
 ├── index.html
-└── vite.config.js
+├── vite.config.js
+└── vercel.json
 ```
 
 ---
 
-## 🤝 License
+## Application Flow
 
-This project is licensed under the **MIT License**.
+1. **Landing** — Users are introduced to Fillux and its purpose.
+2. **Authentication** — Sign in with Google via Firebase Auth.
+3. **Profile Setup** — Complete the profile form with personal, academic, and document details.
+4. **Dashboard** — View and manage your stored profile, with a link to the Chrome Extension.
+5. **Extension** — Access profile data directly in the browser without visiting the web app.
 
 ---
 
-> Built to make your application process effortless.
+## Available Scripts
+
+| Command | Description |
+|---|---|
+| `npm run dev` | Start the local development server |
+| `npm run build` | Build the app for production |
+| `npm run preview` | Preview the production build locally |
+| `npm run lint` | Run ESLint across the project |
+
+---
+
+## License
+
+This project is licensed under the [MIT License](./LICENSE).

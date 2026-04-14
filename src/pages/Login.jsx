@@ -1,48 +1,54 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import {
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signInWithPopup,
-  onAuthStateChanged,
-} from "firebase/auth";
-import { auth, googleProvider, db } from "../firebase/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { supabase } from "../firebase/firebase";
 
 const FEATURES = [
   { icon: "🔍", title: "Smart Detection", desc: "Reads any form structure automatically" },
   { icon: "⚡", title: "Instant Fill",    desc: "Completes forms in under 2 seconds"    },
-  { icon: "🔒", title: "Private & Safe",  desc: "Your data stays in Firestore, not shared" },
+  { icon: "🔒", title: "Private & Safe",  desc: "Your data stays in Supabase, not shared" },
 ];
 
 export default function Login() {
-  const navigate  = useNavigate();
-  const location  = useLocation();
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  // Read ?mode=signup from URL
   const initialMode = new URLSearchParams(location.search).get("mode") === "signup" ? "signup" : "login";
-  const [mode,  setMode]  = useState(initialMode);
-  const [email, setEmail] = useState("");
-  const [pass,  setPass]  = useState("");
-  const [error, setError] = useState("");
-  const [busy,  setBusy]  = useState(false);
-  const [gBusy, setGBusy] = useState(false);
+  const [mode,        setMode]        = useState(initialMode);
+  const [email,       setEmail]       = useState("");
+  const [pass,        setPass]        = useState("");
+  const [confirmPass, setConfirmPass] = useState("");
+  const [fullName,    setFullName]    = useState("");
+  const [error,       setError]       = useState("");
+  const [busy,        setBusy]        = useState(false);
 
-  /* If already logged in, redirect immediately */
+  const [ef,  setEf]  = useState(false);
+  const [pf,  setPf]  = useState(false);
+  const [cpf, setCpf] = useState(false);
+  const [nf,  setNf]  = useState(false);
+
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
-      if (u) await goToCorrectPage(u);
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) await goToCorrectPage(session.user);
     });
-    return unsub;
   }, []);
 
   const clearErr = () => setError("");
 
-  /** After login/signup, check if profile exists to decide where to go. */
+  const switchMode = (m) => {
+    setMode(m);
+    setFullName("");
+    setConfirmPass("");
+    clearErr();
+  };
+
   const goToCorrectPage = async (u) => {
     try {
-      const snap = await getDoc(doc(db, "profiles", u.uid));
-      navigate(snap.exists() ? "/home" : "/form", { replace: true });
+      const { data } = await supabase
+        .from("profiles")
+        .select("uid")
+        .eq("uid", u.id)
+        .single();
+      navigate(data ? "/home" : "/form", { replace: true });
     } catch {
       navigate("/form", { replace: true });
     }
@@ -50,190 +56,570 @@ export default function Login() {
 
   const handleSubmit = async () => {
     if (!email || !pass) { setError("Enter your email and password."); return; }
+    if (mode === "signup") {
+      if (!fullName.trim())     { setError("Please enter your full name."); return; }
+      if (pass.length < 6)      { setError("Password must be at least 6 characters."); return; }
+      if (pass !== confirmPass) { setError("Passwords do not match. Please try again."); return; }
+    }
     clearErr(); setBusy(true);
     try {
-      const res = mode === "login"
-        ? await signInWithEmailAndPassword(auth, email, pass)
-        : await createUserWithEmailAndPassword(auth, email, pass);
-      await goToCorrectPage(res.user);
+      let result;
+      if (mode === "login") {
+        result = await supabase.auth.signInWithPassword({ email, password: pass });
+      } else {
+        result = await supabase.auth.signUp({
+          email, password: pass,
+          options: { data: { full_name: fullName.trim() } },
+        });
+      }
+      if (result.error) throw result.error;
+      if (result.data?.user) await goToCorrectPage(result.data.user);
     } catch (e) {
-      const raw = e.code?.replace("auth/", "").replace(/-/g, " ") || "Something went wrong";
-      setError(raw.charAt(0).toUpperCase() + raw.slice(1) + ".");
+      setError(e.message || "Something went wrong.");
     } finally { setBusy(false); }
   };
 
-  const handleGoogle = async () => {
-    clearErr(); setGBusy(true);
-    try {
-      const res = await signInWithPopup(auth, googleProvider);
-      await goToCorrectPage(res.user);
-    } catch (e) {
-      const raw = e.code?.replace("auth/", "").replace(/-/g, " ") || "Google sign-in failed";
-      setError(raw.charAt(0).toUpperCase() + raw.slice(1) + ".");
-    } finally { setGBusy(false); }
-  };
-
-  const isLoading = busy || gBusy;
-
-  const inp = (focused = false) => ({
-    width: "100%", boxSizing: "border-box",
-    borderRadius: "0.6875rem",
-    border: `1px solid ${focused ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.09)"}`,
-    backgroundColor: focused ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.04)",
-    padding: "0.6875rem 0.875rem",
-    fontSize: "0.875rem", color: "white",
-    outline: "none", opacity: isLoading ? 0.4 : 1,
-    transition: "border-color 0.2s, background-color 0.2s",
-    fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
-  });
-
-  const [ef, setEf] = useState(false);
-  const [pf, setPf] = useState(false);
+  const isLoading = busy;
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", backgroundColor: "#080808", fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif" }}>
+    <div className="fl-root">
 
-      {/* ═══ LEFT PANEL (desktop only) ═══ */}
-      <div className="left-panel" style={{
-        display: "none", position: "relative",
-        width: "52%", flexDirection: "column",
-        overflow: "hidden", borderRight: "1px solid rgba(255,255,255,0.06)",
-        backgroundColor: "#0c0c0c",
-      }}>
-        <div style={{ pointerEvents: "none", position: "absolute", inset: 0, opacity: 0.035, backgroundImage: "linear-gradient(white 1px,transparent 1px),linear-gradient(90deg,white 1px,transparent 1px)", backgroundSize: "44px 44px" }} />
-        <div style={{ pointerEvents: "none", position: "absolute", bottom: "-8rem", left: "-8rem", height: 500, width: 500, borderRadius: "9999px", background: "white", opacity: 0.018, filter: "blur(96px)" }} />
+      {/* ═══ LEFT PANEL — desktop only ═══ */}
+      <div className="fl-left">
+        <div className="fl-grid-overlay" />
+        <div className="fl-glow-blob" />
 
-        <div style={{ position: "relative", zIndex: 10, display: "flex", height: "100%", flexDirection: "column", padding: "3rem 3.5rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <div style={{ display: "flex", height: "2.25rem", width: "2.25rem", alignItems: "center", justifyContent: "center", borderRadius: "0.75rem", backgroundColor: "white", color: "black", fontSize: "1rem", fontWeight: 900 }}>⚡</div>
-            <span style={{ fontSize: "1.0625rem", fontWeight: 700, letterSpacing: "-0.02em", color: "white" }}>AutoSlay</span>
+        <div className="fl-left-inner">
+          {/* Brand */}
+          <div className="fl-brand">
+            <div className="fl-brand-icon">⚡</div>
+            <span className="fl-brand-name">Fillux</span>
           </div>
 
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "4rem 0" }}>
-            <div style={{ marginBottom: "1.75rem", borderRadius: "9999px", border: "1px solid rgba(255,255,255,0.1)", padding: "0.375rem 1rem", fontSize: "0.6875rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.15em", color: "rgba(255,255,255,0.3)", width: "fit-content" }}>
-              Smart Form Autofill
-            </div>
-            <h1 style={{ marginBottom: "1.25rem", fontSize: "3.25rem", fontWeight: 800, lineHeight: 1.05, letterSpacing: "-0.04em", color: "white" }}>
-              Stop filling<br />forms <span style={{ color: "rgba(255,255,255,0.25)" }}>manually.</span>
+          {/* Hero copy */}
+          <div className="fl-hero">
+            <div className="fl-badge">Smart Form Autofill</div>
+            <h1 className="fl-headline">
+              Stop filling<br />forms <span className="fl-dim">manually.</span>
             </h1>
-            <p style={{ marginBottom: "3rem", maxWidth: 380, fontSize: "0.9375rem", lineHeight: 1.75, color: "rgba(255,255,255,0.35)" }}>
-              AutoSlay reads any web form and completes it instantly using your saved profile. One click. Every form.
+            <p className="fl-sub">
+              Fillux reads any web form and completes it instantly using your saved profile. One click. Every form.
             </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div className="fl-features">
               {FEATURES.map(f => (
-                <div key={f.title} style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-                  <div style={{ display: "flex", height: "2.5rem", width: "2.5rem", flexShrink: 0, alignItems: "center", justifyContent: "center", borderRadius: "0.75rem", border: "1px solid rgba(255,255,255,0.08)", backgroundColor: "rgba(255,255,255,0.04)", fontSize: "1rem" }}>{f.icon}</div>
+                <div key={f.title} className="fl-feature-row">
+                  <div className="fl-feature-icon">{f.icon}</div>
                   <div>
-                    <div style={{ fontSize: "0.8125rem", fontWeight: 600, color: "rgba(255,255,255,0.7)" }}>{f.title}</div>
-                    <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.3)" }}>{f.desc}</div>
+                    <div className="fl-feature-title">{f.title}</div>
+                    <div className="fl-feature-desc">{f.desc}</div>
                   </div>
                 </div>
               ))}
             </div>
           </div>
-          <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.15)" }}>© 2025 AutoSlay · MIT License</div>
+
+          <div className="fl-footer">© 2025 Fillux · MIT License</div>
         </div>
       </div>
 
-      {/* ═══ RIGHT PANEL ═══ */}
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "3rem 1.5rem" }}>
-        <div style={{ width: "100%", maxWidth: 400 }}>
+      {/* ═══ RIGHT PANEL — form ═══ */}
+      <div className="fl-right">
+        <div className="fl-form-wrap">
 
           {/* Mobile brand */}
-          <div className="mobile-brand" style={{ marginBottom: "2rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <div style={{ display: "flex", height: "2rem", width: "2rem", alignItems: "center", justifyContent: "center", borderRadius: "0.75rem", backgroundColor: "white", color: "black", fontSize: "0.875rem", fontWeight: 900 }}>⚡</div>
-            <span style={{ fontSize: "1rem", fontWeight: 700, color: "white" }}>AutoSlay</span>
+          <div className="fl-mobile-brand">
+            <div className="fl-brand-icon fl-brand-icon--sm">⚡</div>
+            <span className="fl-brand-name fl-brand-name--sm">Fillux</span>
           </div>
 
           {/* Mode toggle */}
-          <div style={{ marginBottom: "1.75rem", display: "flex", gap: "0.25rem", borderRadius: "0.875rem", border: "1px solid rgba(255,255,255,0.08)", backgroundColor: "rgba(255,255,255,0.04)", padding: "0.25rem" }}>
-            {["login","signup"].map(m => (
-              <button key={m} onClick={() => { setMode(m); clearErr(); }}
-                style={{ flex: 1, borderRadius: "0.625rem", padding: "0.625rem 0", fontSize: "0.8125rem", fontWeight: 600, border: "none", cursor: "pointer", transition: "all 0.2s", backgroundColor: mode === m ? "white" : "transparent", color: mode === m ? "black" : "rgba(255,255,255,0.35)", boxShadow: mode === m ? "0 1px 3px rgba(0,0,0,0.3)" : "none" }}
-              >{m === "login" ? "Sign In" : "Create Account"}</button>
+          <div className="fl-toggle">
+            {["login", "signup"].map(m => (
+              <button
+                key={m}
+                className={`fl-toggle-btn${mode === m ? " fl-toggle-btn--active" : ""}`}
+                onClick={() => switchMode(m)}
+              >
+                {m === "login" ? "Sign In" : "Create Account"}
+              </button>
             ))}
           </div>
 
           {/* Heading */}
-          <div style={{ marginBottom: "1.5rem" }}>
-            <h2 style={{ fontSize: "1.625rem", fontWeight: 800, letterSpacing: "-0.03em", color: "white", margin: 0 }}>
+          <div className="fl-heading">
+            <h2 className="fl-h2">
               {mode === "login" ? "Welcome back" : "Get started"}
             </h2>
-            <p style={{ marginTop: "0.25rem", fontSize: "0.875rem", color: "rgba(255,255,255,0.35)" }}>
-              {mode === "login" ? "Sign in to your AutoSlay account" : "Create your free account in seconds"}
+            <p className="fl-h2-sub">
+              {mode === "login" ? "Sign in to your Fillux account" : "Create your free account in seconds"}
             </p>
           </div>
 
-          {/* Google */}
-          <button onClick={handleGoogle} disabled={isLoading}
-            style={{ marginBottom: "1.25rem", display: "flex", width: "100%", alignItems: "center", justifyContent: "center", gap: "0.75rem", borderRadius: "0.75rem", border: "1px solid rgba(255,255,255,0.1)", backgroundColor: "rgba(255,255,255,0.05)", padding: "0.75rem 0", fontSize: "0.875rem", fontWeight: 600, color: "rgba(255,255,255,0.7)", cursor: isLoading ? "not-allowed" : "pointer", opacity: isLoading ? 0.4 : 1, transition: "all 0.2s", boxSizing: "border-box" }}
-            onMouseEnter={e => { if (!isLoading) { e.currentTarget.style.borderColor = "rgba(255,255,255,0.2)"; e.currentTarget.style.color = "white"; }}}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; e.currentTarget.style.color = "rgba(255,255,255,0.7)"; }}
-          >
-            {gBusy
-              ? <span style={{ display: "block", height: "1rem", width: "1rem", borderRadius: "9999px", border: "2px solid rgba(255,255,255,0.2)", borderTopColor: "white", animation: "aSpin 0.7s linear infinite" }} />
-              : <svg width="17" height="17" viewBox="0 0 18 18" fill="none"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615Z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18Z" fill="#34A853"/><path d="M3.964 10.706A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332Z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.163 6.656 3.58 9 3.58Z" fill="#EA4335"/></svg>
-            }
-            <span>{gBusy ? "Signing in…" : "Continue with Google"}</span>
-          </button>
-
-          {/* Divider */}
-          <div style={{ marginBottom: "1.25rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <div style={{ height: 1, flex: 1, backgroundColor: "rgba(255,255,255,0.07)" }} />
-            <span style={{ fontSize: "0.6875rem", color: "rgba(255,255,255,0.2)" }}>or continue with email</span>
-            <div style={{ height: 1, flex: 1, backgroundColor: "rgba(255,255,255,0.07)" }} />
-          </div>
-
-          {/* Email */}
-          <div style={{ marginBottom: "1rem" }}>
-            <label style={{ display: "block", marginBottom: "0.4rem", fontSize: "0.6875rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.35)" }}>Email address</label>
-            <input type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && handleSubmit()} disabled={isLoading}
-              style={inp(ef)} onFocus={() => setEf(true)} onBlur={() => setEf(false)} />
-          </div>
-
-          {/* Password */}
-          <div style={{ marginBottom: "1.25rem" }}>
-            <div style={{ marginBottom: "0.4rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <label style={{ fontSize: "0.6875rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.35)" }}>Password</label>
-              {mode === "login" && <span style={{ cursor: "pointer", fontSize: "0.6875rem", color: "rgba(255,255,255,0.2)" }}>Forgot?</span>}
-            </div>
-            <input type="password" placeholder={mode === "signup" ? "Min. 6 characters" : "••••••••"} value={pass} onChange={e => setPass(e.target.value)} onKeyDown={e => e.key === "Enter" && handleSubmit()} disabled={isLoading}
-              style={inp(pf)} onFocus={() => setPf(true)} onBlur={() => setPf(false)} />
-          </div>
-
-          {/* Error */}
-          {error && (
-            <div style={{ marginBottom: "1rem", borderRadius: "0.625rem", border: "1px solid rgba(239,68,68,0.2)", backgroundColor: "rgba(239,68,68,0.07)", padding: "0.75rem 1rem", fontSize: "0.8125rem", fontWeight: 500, color: "rgb(248,113,113)" }}>
-              {error}
+          {/* Full Name — signup only */}
+          {mode === "signup" && (
+            <div className="fl-field">
+              <label className="fl-label">Full Name</label>
+              <input
+                className={`fl-input${nf ? " fl-input--focus" : ""}`}
+                type="text"
+                placeholder="John Doe"
+                value={fullName}
+                onChange={e => setFullName(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleSubmit()}
+                disabled={isLoading}
+                onFocus={() => setNf(true)}
+                onBlur={() => setNf(false)}
+              />
             </div>
           )}
 
+          {/* Email */}
+          <div className="fl-field">
+            <label className="fl-label">Email address</label>
+            <input
+              className={`fl-input${ef ? " fl-input--focus" : ""}`}
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleSubmit()}
+              disabled={isLoading}
+              onFocus={() => setEf(true)}
+              onBlur={() => setEf(false)}
+            />
+          </div>
+
+          {/* Password */}
+          <div className="fl-field">
+            <div className="fl-label-row">
+              <label className="fl-label">Password</label>
+              {mode === "login" && (
+                <span className="fl-forgot">Forgot?</span>
+              )}
+            </div>
+            <input
+              className={`fl-input${pf ? " fl-input--focus" : ""}`}
+              type="password"
+              placeholder={mode === "signup" ? "Min. 6 characters" : "••••••••"}
+              value={pass}
+              onChange={e => setPass(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleSubmit()}
+              disabled={isLoading}
+              onFocus={() => setPf(true)}
+              onBlur={() => setPf(false)}
+            />
+          </div>
+
+          {/* Re-enter Password — signup only */}
+          {mode === "signup" && (
+            <div className="fl-field">
+              <label className="fl-label">Re-enter Password</label>
+              <input
+                className={`fl-input${cpf ? " fl-input--focus" : ""}${confirmPass && pass !== confirmPass ? " fl-input--error" : ""}`}
+                type="password"
+                placeholder="Confirm your password"
+                value={confirmPass}
+                onChange={e => setConfirmPass(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleSubmit()}
+                disabled={isLoading}
+                onFocus={() => setCpf(true)}
+                onBlur={() => setCpf(false)}
+              />
+              {confirmPass && pass !== confirmPass && (
+                <p className="fl-inline-error">Passwords don't match</p>
+              )}
+            </div>
+          )}
+
+          {/* Error banner */}
+          {error && (
+            <div className="fl-error-banner">{error}</div>
+          )}
+
           {/* Submit */}
-          <button onClick={handleSubmit} disabled={isLoading}
-            style={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "center", gap: "0.625rem", borderRadius: "0.75rem", backgroundColor: "white", padding: "0.875rem 0", fontSize: "0.875rem", fontWeight: 700, color: "black", border: "none", cursor: isLoading ? "not-allowed" : "pointer", opacity: isLoading ? 0.5 : 1, transition: "background-color 0.2s", boxSizing: "border-box" }}
-            onMouseEnter={e => { if (!isLoading) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.9)"; }}
-            onMouseLeave={e => { e.currentTarget.style.backgroundColor = "white"; }}
+          <button
+            className="fl-submit"
+            onClick={handleSubmit}
+            disabled={isLoading}
           >
-            {busy && <span style={{ display: "block", height: "1rem", width: "1rem", borderRadius: "9999px", border: "2px solid rgba(0,0,0,0.2)", borderTopColor: "black", animation: "aSpin 0.7s linear infinite" }} />}
+            {busy && <span className="fl-spinner" />}
             {busy ? "Please wait…" : mode === "login" ? "Sign In" : "Create Account"}
           </button>
 
-          {/* Switch */}
-          <p style={{ marginTop: "1.25rem", textAlign: "center", fontSize: "0.8125rem", color: "rgba(255,255,255,0.25)" }}>
+          {/* Switch mode */}
+          <p className="fl-switch">
             {mode === "login" ? "Don't have an account? " : "Already have an account? "}
-            <button onClick={() => { setMode(mode === "login" ? "signup" : "login"); clearErr(); }}
-              style={{ fontWeight: 600, color: "rgba(255,255,255,0.6)", background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: "inherit" }}
-            >{mode === "login" ? "Sign up free" : "Sign in"}</button>
+            <button
+              className="fl-switch-btn"
+              onClick={() => switchMode(mode === "login" ? "signup" : "login")}
+            >
+              {mode === "login" ? "Sign up free" : "Sign in"}
+            </button>
           </p>
         </div>
       </div>
 
       <style>{`
-        @keyframes aSpin { to { transform: rotate(360deg); } }
-        input::placeholder { color: rgba(255,255,255,0.15); }
+        /* ── Reset & root ── */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        .fl-root {
+          display: flex;
+          min-height: 100vh;
+          min-height: 100dvh;
+          background: #080808;
+          font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+        }
+
+        /* ── Left panel ── */
+        .fl-left {
+          display: none;
+          position: relative;
+          width: 52%;
+          flex-direction: column;
+          overflow: hidden;
+          border-right: 1px solid rgba(255,255,255,0.06);
+          background: #0c0c0c;
+        }
         @media (min-width: 1024px) {
-          .left-panel { display: flex !important; }
-          .mobile-brand { display: none !important; }
+          .fl-left { display: flex; }
+        }
+
+        .fl-grid-overlay {
+          pointer-events: none;
+          position: absolute;
+          inset: 0;
+          opacity: 0.035;
+          background-image:
+            linear-gradient(white 1px, transparent 1px),
+            linear-gradient(90deg, white 1px, transparent 1px);
+          background-size: 44px 44px;
+        }
+        .fl-glow-blob {
+          pointer-events: none;
+          position: absolute;
+          bottom: -8rem;
+          left: -8rem;
+          height: 500px;
+          width: 500px;
+          border-radius: 9999px;
+          background: white;
+          opacity: 0.018;
+          filter: blur(96px);
+        }
+
+        .fl-left-inner {
+          position: relative;
+          z-index: 10;
+          display: flex;
+          height: 100%;
+          flex-direction: column;
+          padding: 3rem 3.5rem;
+        }
+
+        /* ── Brand ── */
+        .fl-brand {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+        }
+        .fl-brand-icon {
+          display: flex;
+          height: 2.25rem;
+          width: 2.25rem;
+          align-items: center;
+          justify-content: center;
+          border-radius: 0.75rem;
+          background: white;
+          color: black;
+          font-size: 1rem;
+          font-weight: 900;
+          flex-shrink: 0;
+        }
+        .fl-brand-icon--sm {
+          height: 2rem;
+          width: 2rem;
+          font-size: 0.875rem;
+          border-radius: 0.625rem;
+        }
+        .fl-brand-name {
+          font-size: 1.0625rem;
+          font-weight: 700;
+          letter-spacing: -0.02em;
+          color: white;
+          font-family: 'Comic Sans MS', 'Comic Sans', cursive;
+        }
+        .fl-brand-name--sm {
+          font-size: 1rem;
+        }
+
+        /* ── Hero ── */
+        .fl-hero {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          padding: 4rem 0;
+        }
+        .fl-badge {
+          display: inline-block;
+          margin-bottom: 1.75rem;
+          border-radius: 9999px;
+          padding: 0.375rem 1rem;
+          font-size: 0.6875rem;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.15em;
+          color: rgba(255,255,255,0.3);
+        }
+        .fl-headline {
+          margin-bottom: 1.25rem;
+          font-size: 3.25rem;
+          font-weight: 800;
+          line-height: 1.05;
+          letter-spacing: -0.04em;
+          color: white;
+        }
+        .fl-dim { color: rgba(255,255,255,0.25); }
+        .fl-sub {
+          margin-bottom: 3rem;
+          max-width: 380px;
+          font-size: 0.9375rem;
+          line-height: 1.75;
+          color: rgba(255,255,255,0.35);
+        }
+        .fl-features { display: flex; flex-direction: column; gap: 1rem; }
+        .fl-feature-row { display: flex; align-items: center; gap: 1rem; }
+        .fl-feature-icon {
+          display: flex;
+          height: 2.5rem;
+          width: 2.5rem;
+          flex-shrink: 0;
+          align-items: center;
+          justify-content: center;
+          border-radius: 0.75rem;
+          border: 1px solid rgba(255,255,255,0.08);
+          background: rgba(255,255,255,0.04);
+          font-size: 1rem;
+        }
+        .fl-feature-title { font-size: 0.8125rem; font-weight: 600; color: rgba(255,255,255,0.7); }
+        .fl-feature-desc  { font-size: 0.75rem; color: rgba(255,255,255,0.3); }
+
+        .fl-footer { font-size: 0.75rem; color: rgba(255,255,255,0.15); }
+
+        /* ── Right panel ── */
+        .fl-right {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 1.25rem 1rem;
+          padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));
+          overflow-y: auto;
+        }
+        @media (min-width: 480px) {
+          .fl-right { padding: 2rem 1.5rem; }
+        }
+        @media (min-width: 768px) {
+          .fl-right { padding: 3rem 2rem; }
+        }
+
+        .fl-form-wrap {
+          width: 100%;
+          max-width: 400px;
+          padding-top: 0.5rem;
+          padding-bottom: 1rem;
+        }
+
+        /* ── Mobile brand (hidden on desktop) ── */
+        .fl-mobile-brand {
+          display: flex;
+          align-items: center;
+          gap: 0.625rem;
+          margin-bottom: 1.75rem;
+        }
+        @media (min-width: 1024px) {
+          .fl-mobile-brand { display: none; }
+        }
+
+        /* ── Toggle ── */
+        .fl-toggle {
+          display: flex;
+          gap: 0.25rem;
+          border-radius: 0.875rem;
+          border: 1px solid rgba(255,255,255,0.08);
+          background: rgba(255,255,255,0.04);
+          padding: 0.25rem;
+          margin-bottom: 1.5rem;
+        }
+        .fl-toggle-btn {
+          flex: 1;
+          border-radius: 0.625rem;
+          padding: 0.625rem 0;
+          font-size: 0.8125rem;
+          font-weight: 600;
+          border: none;
+          cursor: pointer;
+          transition: all 0.2s;
+          background: transparent;
+          color: rgba(255,255,255,0.35);
+          font-family: inherit;
+          /* touch target */
+          min-height: 2.5rem;
+        }
+        .fl-toggle-btn--active {
+          background: white;
+          color: black;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+
+        /* ── Heading ── */
+        .fl-heading { margin-bottom: 1.25rem; }
+        .fl-h2 {
+          font-size: clamp(1.375rem, 5vw, 1.625rem);
+          font-weight: 800;
+          letter-spacing: -0.03em;
+          color: white;
+        }
+        .fl-h2-sub {
+          margin-top: 0.25rem;
+          font-size: 0.875rem;
+          color: rgba(255,255,255,0.35);
+        }
+
+        /* ── Fields ── */
+        .fl-field { margin-bottom: 0.875rem; }
+        .fl-label {
+          display: block;
+          margin-bottom: 0.4rem;
+          font-size: 0.6875rem;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          color: rgba(255,255,255,0.35);
+        }
+        .fl-label-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 0.4rem;
+        }
+        .fl-forgot {
+          font-size: 0.6875rem;
+          color: rgba(255,255,255,0.2);
+          cursor: pointer;
+        }
+
+        .fl-input {
+          width: 100%;
+          border-radius: 0.6875rem;
+          border: 1px solid rgba(255,255,255,0.09);
+          background: rgba(255,255,255,0.04);
+          /* larger touch target on mobile */
+          padding: 0.8125rem 0.875rem;
+          font-size: 1rem;        /* prevents iOS zoom */
+          color: white;
+          outline: none;
+          transition: border-color 0.2s, background-color 0.2s;
+          font-family: inherit;
+          -webkit-appearance: none;
+          appearance: none;
+        }
+        /* Clamp font on larger screens */
+        @media (min-width: 480px) {
+          .fl-input { font-size: 0.875rem; padding: 0.6875rem 0.875rem; }
+        }
+        .fl-input--focus {
+          border-color: rgba(255,255,255,0.25);
+          background: rgba(255,255,255,0.06);
+        }
+        .fl-input--error {
+          border-color: rgba(239,68,68,0.5) !important;
+        }
+        .fl-input:disabled { opacity: 0.4; }
+        .fl-input::placeholder { color: rgba(255,255,255,0.15); }
+
+        .fl-inline-error {
+          margin-top: 0.35rem;
+          font-size: 0.75rem;
+          color: rgb(248,113,113);
+        }
+
+        /* ── Error banner ── */
+        .fl-error-banner {
+          margin-bottom: 0.875rem;
+          border-radius: 0.625rem;
+          border: 1px solid rgba(239,68,68,0.2);
+          background: rgba(239,68,68,0.07);
+          padding: 0.75rem 1rem;
+          font-size: 0.8125rem;
+          font-weight: 500;
+          color: rgb(248,113,113);
+        }
+
+        /* ── Submit ── */
+        .fl-submit {
+          display: flex;
+          width: 100%;
+          align-items: center;
+          justify-content: center;
+          gap: 0.625rem;
+          border-radius: 0.75rem;
+          background: white;
+          padding: 0.9375rem 0;
+          font-size: 0.9375rem;
+          font-weight: 700;
+          color: black;
+          border: none;
+          cursor: pointer;
+          transition: background-color 0.2s, opacity 0.2s;
+          font-family: inherit;
+          /* nice large tap target */
+          min-height: 3rem;
+          margin-top: 0.25rem;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .fl-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+        .fl-submit:not(:disabled):hover { background: rgba(255,255,255,0.88); }
+        .fl-submit:not(:disabled):active { background: rgba(255,255,255,0.75); transform: scale(0.99); }
+
+        /* ── Spinner ── */
+        @keyframes aSpin { to { transform: rotate(360deg); } }
+        .fl-spinner {
+          display: block;
+          height: 1rem;
+          width: 1rem;
+          border-radius: 9999px;
+          border: 2px solid rgba(0,0,0,0.2);
+          border-top-color: black;
+          animation: aSpin 0.7s linear infinite;
+          flex-shrink: 0;
+        }
+
+        /* ── Switch mode ── */
+        .fl-switch {
+          margin-top: 1.125rem;
+          text-align: center;
+          font-size: 0.8125rem;
+          color: rgba(255,255,255,0.25);
+        }
+        .fl-switch-btn {
+          font-weight: 600;
+          color: rgba(255,255,255,0.6);
+          background: none;
+          border: none;
+          cursor: pointer;
+          padding: 0;
+          font-size: inherit;
+          font-family: inherit;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .fl-switch-btn:hover { color: rgba(255,255,255,0.85); }
+
+        /* ── Very small phones (<360px) ── */
+        @media (max-width: 359px) {
+          .fl-form-wrap { padding-left: 0.25rem; padding-right: 0.25rem; }
+          .fl-h2 { font-size: 1.25rem; }
         }
       `}</style>
     </div>

@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { doc, setDoc, getDoc } from "firebase/firestore";
-import { auth, db } from "../firebase/firebase";
-import { signOut } from "firebase/auth";
+import { supabase } from "../firebase/firebase";
 
 /* ══════════════════════════════════════════════════════
    THEME
@@ -254,7 +252,7 @@ const uploadToCloudinary = async (file, setProgress) => {
 ══════════════════════════════════════════════════════ */
 export default function Form() {
   const navigate = useNavigate();
-  const user     = auth.currentUser;
+  const [user, setUser] = useState(null);
 
   const [profile,   setProfile]   = useState({ ...EMPTY_PROFILE });
   const [active,    setActive]    = useState("profile");
@@ -287,24 +285,29 @@ export default function Form() {
 
   const contentRef = useRef(null);
 
-  /* ── load from Firestore ── */
+  /* ── load from Supabase ── */
   useEffect(() => {
-    if (!user) { navigate("/login"); return; }
     (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) { navigate("/login"); return; }
+      setUser(session.user);
       try {
-        const snap = await getDoc(doc(db, "profiles", user.uid));
-        if (snap.exists()) {
-          const data = snap.data();
+        const { data } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("uid", session.user.id)
+          .single();
+        if (data) {
           setProfile(prev => ({ ...prev, ...data }));
-          if (data.resumeURL)      setResumeURL(data.resumeURL);
+          if (data.resumeURL)       setResumeURL(data.resumeURL);
           if (data.collegePhotoURL) setPhotoURL(data.collegePhotoURL);
-          if (data.yesNoFields)    setYesNoFields(prev => ({ ...prev, ...data.yesNoFields }));
+          if (data.yesNoFields)     setYesNoFields(prev => ({ ...prev, ...data.yesNoFields }));
           if (data.termsAccepted !== undefined) setTermsAccepted(data.termsAccepted);
         }
       } catch (e) { console.error("Load error:", e); }
       finally { setLoading(false); }
     })();
-  }, [user, navigate]);
+  }, [navigate]);
 
   useEffect(() => {
     if (contentRef.current) contentRef.current.scrollTop = 0;
@@ -365,16 +368,21 @@ export default function Form() {
         setPhotoUp(false);
       }
 
-      await setDoc(doc(db, "profiles", user.uid), {
+      const payload = {
         ...profile,
         yesNoFields,
         termsAccepted,
         resumeURL:       finalResumeURL || "",
         collegePhotoURL: finalPhotoURL  || "",
         updatedAt: new Date().toISOString(),
-        uid:   user.uid,
+        uid:   user.id,
         email: user.email,
-      });
+      };
+
+      const { error } = await supabase
+        .from("profiles")
+        .upsert(payload, { onConflict: "uid" });
+      if (error) throw error;
 
       setSaved(true);
       setTimeout(() => { setSaved(false); navigate("/home"); }, 2000);
@@ -443,10 +451,10 @@ export default function Form() {
               {user?.photoURL ? <img src={user.photoURL} alt="" style={{ width: "100%", height: "100%", borderRadius: "9999px", objectFit: "cover" }} /> : "👤"}
             </div>
             <div style={{ minWidth: 0, flex: 1 }}>
-              <p style={{ margin: 0, fontSize: "0.75rem", fontWeight: 600, color: "rgba(255,255,255,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.displayName || "User"}</p>
+              <p style={{ margin: 0, fontSize: "0.75rem", fontWeight: 600, color: "rgba(255,255,255,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.user_metadata?.full_name || user?.email || "User"}</p>
               <p style={{ margin: 0, fontSize: "0.625rem", color: "rgba(255,255,255,0.25)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.email}</p>
             </div>
-            <button onClick={async () => { await signOut(auth); navigate("/"); }}
+            <button onClick={async () => { await supabase.auth.signOut(); navigate("/"); }}
               style={{ flexShrink: 0, borderRadius: "0.5rem", padding: "0.375rem", color: "rgba(255,255,255,0.2)", background: "none", border: "none", cursor: "pointer" }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
             </button>
