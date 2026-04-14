@@ -193,9 +193,6 @@ export default function Login() {
           <div className="fl-field">
             <div className="fl-label-row">
               <label className="fl-label">Password</label>
-              {mode === "login" && (
-                <span className="fl-forgot">Forgot?</span>
-              )}
             </div>
             <input
               className={`fl-input${pf ? " fl-input--focus" : ""}`}
