@@ -1,24 +1,28 @@
 # Fillux
 
-**Fillux** is a profile management web application that lets you store your personal, academic, and document details once — and access them instantly whenever you need to fill out forms or applications.
+**Fillux** is a smart form autofill platform that lets you save your profile details once and fill any web form instantly — job applications, hackathons, events, registrations, and more.
 
-Built with **React**, **Tailwind CSS**, **Firebase**, and **Cloudinary**.
+It ships as both a **web app** and a **Chrome Extension**, backed by **Supabase** for authentication and data storage, and **Cloudinary** for document uploads.
 
 ---
 
 ## Overview
 
-Filling out the same information repeatedly across job applications, college forms, and registrations is tedious. Fillux solves this by giving you a single, secure profile that stores everything — so your data is always ready when you need it.
+Filling out the same information repeatedly across every platform is tedious. Fillux solves this by giving you a single, secure profile that stores everything — your personal details, academic info, resume, and more — so your data is always ready when you need it.
+
+The Chrome Extension reads any form on any website and fills it in one click using your saved profile.
 
 ---
 
 ## Features
 
-- **Centralized Profile** — Store personal details, academic information, and contact data in one place via Firebase Firestore.
-- **Document Management** — Upload and manage your Resume and College ID securely through Cloudinary.
-- **Google Authentication** — Sign in quickly and securely using Firebase Authentication with Google OAuth support.
-- **Chrome Extension Support** — Access your profile data directly from the browser via the Fillux Chrome Extension.
-- **Responsive UI** — Clean, dark-themed interface built with Tailwind CSS, optimized for both desktop and mobile.
+- **One-click form autofill** — Detects form fields on any page and fills them instantly using your profile via the Chrome Extension.
+- **Centralized profile storage** — Personal details, academic info, and links saved securely in Supabase Postgres.
+- **Document uploads** — Resume and College Photo ID uploaded and stored via Cloudinary.
+- **Email & password authentication** — Sign up and sign in via Supabase Auth with full session management.
+- **Chrome Extension support** — Dedicated extension popup for profile setup and form filling directly in the browser.
+- **Responsive web dashboard** — Manage your profile from any device via the Fillux web app.
+- **Works on major platforms** — Unstop, Devpost, Devfolio, DoraHacks, HackerEarth, HackerRank, MLH, Kaggle, Google Forms, and more.
 
 ---
 
@@ -26,12 +30,42 @@ Filling out the same information repeatedly across job applications, college for
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 19, React Router DOM |
+| Frontend | React 19, React Router DOM v7 |
 | Styling | Tailwind CSS v4 |
-| Auth & Database | Firebase Authentication, Firestore |
+| Auth & Database | Supabase (Auth + Postgres) |
 | File Storage | Cloudinary |
-| Build Tool | Vite |
+| Build Tool | Vite 8 |
 | Deployment | Vercel |
+
+---
+
+## Project Structure
+
+```
+fillux/
+├── public/                        # Static assets
+├── src/
+│   ├── assets/                    # Images and icons
+│   ├── components/                # Reusable UI components
+│   │   ├── Contact.jsx
+│   │   └── ProfileIcon.jsx
+│   ├── contexts/
+│   │   └── AuthContext.jsx        # Supabase session context
+│   ├── firebase/
+│   │   └── firebase.js            # Supabase client initialization
+│   ├── pages/
+│   │   ├── Home.jsx               # Dashboard with autofill trigger
+│   │   ├── Login.jsx              # Sign in / sign up
+│   │   ├── Form.jsx               # Full profile setup page
+│   │   ├── ExtensionPopup.jsx     # Chrome extension UI
+│   │   └── Privacy.jsx            # Privacy policy
+│   ├── App.jsx                    # Route configuration (web + extension)
+│   └── main.jsx                   # Application entry point
+├── index.html
+├── vite.config.js                 # Vite config with relative base for extension
+├── vercel.json
+└── BUILD_AND_INSTALL.bat          # Extension build & install script
+```
 
 ---
 
@@ -40,8 +74,8 @@ Filling out the same information repeatedly across job applications, college for
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) v18 or higher
-- A Firebase project with Firestore and Authentication enabled
-- A Cloudinary account with an upload preset configured
+- A [Supabase](https://supabase.com) project with Authentication enabled and a `profiles` table
+- A [Cloudinary](https://cloudinary.com) account with an unsigned upload preset configured
 
 ### 1. Clone the Repository
 
@@ -58,17 +92,12 @@ npm install
 
 ### 3. Configure Environment Variables
 
-Create a `.env` file in the root directory and add the following:
+Create a `.env` file in the root directory:
 
 ```env
-# Firebase
-VITE_FIREBASE_API_KEY=your_api_key
-VITE_FIREBASE_AUTH_DOMAIN=your_auth_domain
-VITE_FIREBASE_PROJECT_ID=your_project_id
-VITE_FIREBASE_STORAGE_BUCKET=your_storage_bucket
-VITE_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
-VITE_FIREBASE_APP_ID=your_app_id
-VITE_FIREBASE_MEASUREMENT_ID=your_measurement_id
+# Supabase
+VITE_SUPABASE_URL=your_supabase_project_url
+VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_anon_key
 
 # Cloudinary
 VITE_CLOUDINARY_CLOUD_NAME=your_cloud_name
@@ -91,40 +120,52 @@ npm run build
 
 ---
 
-## Project Structure
+## Supabase Setup
 
-```
-fillux/
-├── public/                  # Static assets
-├── src/
-│   ├── assets/              # Images and icons
-│   ├── components/          # Reusable UI components
-│   │   ├── Contact.jsx
-│   │   └── ProfileIcon.jsx
-│   ├── contexts/            # React context providers
-│   ├── firebase/            # Firebase initialization and config
-│   ├── pages/               # Application pages
-│   │   ├── Home.jsx         # Dashboard
-│   │   ├── Login.jsx        # Authentication
-│   │   ├── Form.jsx         # Profile setup
-│   │   ├── ExtensionPopup.jsx  # Chrome extension interface
-│   │   └── Privacy.jsx      # Privacy policy
-│   ├── App.jsx              # Route configuration
-│   └── main.jsx             # Application entry point
-├── index.html
-├── vite.config.js
-└── vercel.json
-```
+Create a `profiles` table in your Supabase project with the following key columns:
+
+| Column | Type | Notes |
+|---|---|---|
+| `uid` | `text` | Primary key — maps to Supabase Auth user ID |
+| `email` | `text` | |
+| `firstName` | `text` | |
+| `lastName` | `text` | |
+| `phone` | `text` | |
+| `collegeName` | `text` | |
+| `degreeName` | `text` | |
+| `year` | `text` | |
+| `expectedGraduationYear` | `text` | |
+| `resumeURL` | `text` | Cloudinary URL |
+| `collegePhotoURL` | `text` | Cloudinary URL |
+| `yesNoFields` | `jsonb` | Hackathon quick-answer fields |
+| `termsAccepted` | `boolean` | |
+| `updatedAt` | `text` | ISO timestamp |
+
+Enable Row Level Security (RLS) and add a policy so users can only read and write their own rows using `auth.uid()::text = uid`.
+
+---
+
+## Chrome Extension
+
+The same codebase powers the Chrome Extension. Vite is configured with `base: './'` to generate relative asset paths required for extension contexts.
+
+To install the extension locally:
+
+1. Run `npm run build` to generate the `dist/` folder, or run `BUILD_AND_INSTALL.bat` on Windows.
+2. Open `chrome://extensions` in Chrome.
+3. Enable **Developer mode**.
+4. Click **Load unpacked** and select the `dist/` folder.
+
+The extension detects when it is running inside Chrome (`chrome.runtime.id`) and renders the `ExtensionPopup` interface instead of the web dashboard routes.
 
 ---
 
 ## Application Flow
 
-1. **Landing** — Users are introduced to Fillux and its purpose.
-2. **Authentication** — Sign in with Google via Firebase Auth.
-3. **Profile Setup** — Complete the profile form with personal, academic, and document details.
-4. **Dashboard** — View and manage your stored profile, with a link to the Chrome Extension.
-5. **Extension** — Access profile data directly in the browser without visiting the web app.
+1. **Authentication** — Sign up or sign in with email and password via Supabase Auth.
+2. **Profile setup** — Complete your profile including personal details, academic info, resume upload (required), and optional College Photo ID.
+3. **Dashboard** — View your profile status and trigger autofill from the web app.
+4. **Chrome Extension** — Open the extension popup on any form page and click "Fill This Page" to autofill all matching fields instantly.
 
 ---
 
@@ -133,7 +174,7 @@ fillux/
 | Command | Description |
 |---|---|
 | `npm run dev` | Start the local development server |
-| `npm run build` | Build the app for production |
+| `npm run build` | Build the app and extension for production |
 | `npm run preview` | Preview the production build locally |
 | `npm run lint` | Run ESLint across the project |
 
