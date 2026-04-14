@@ -264,7 +264,7 @@ export default function Login() {
           background: #0c0c0c;
         }
         @media (min-width: 1024px) { .fl-left { display: flex; } }
-
+        
         .fl-grid-overlay {
           pointer-events: none; position: absolute; inset: 0; opacity: 0.035;
           background-image: linear-gradient(white 1px, transparent 1px), linear-gradient(90deg, white 1px, transparent 1px);
