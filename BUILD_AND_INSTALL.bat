@@ -1,6 +1,6 @@
 @echo off
 echo ============================================
-echo  AutoSlay Agent - Build ^& Install Script
+echo  Fillux - Extension Build ^& Install Script
 echo ============================================
 echo.
 
@@ -15,7 +15,8 @@ if %errorlevel% neq 0 (
 )
 
 echo.
-echo [2/3] Building the extension...
+echo [2/3] Building the extension (relative asset paths)...
+set VITE_BUILD_TARGET=extension
 call npm run build
 if %errorlevel% neq 0 (
     echo ERROR: Build failed. Check the errors above.
@@ -24,7 +25,7 @@ if %errorlevel% neq 0 (
 )
 
 echo.
-echo [3/3] Done! 
+echo [3/3] Done!
 echo.
 echo ============================================
 echo  BUILD SUCCESSFUL
@@ -32,7 +33,7 @@ echo ============================================
 echo.
 echo Next steps:
 echo  1. Open Chrome and go to: chrome://extensions
-echo  2. Click the RELOAD button (refresh icon) on AutoSlay Agent
+echo  2. Click the RELOAD button (refresh icon) on Fillux
 echo  3. Click the extension icon - it should work now!
 echo.
 pause

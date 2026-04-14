@@ -1,4 +1,4 @@
-import { HashRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import Login          from './pages/Login';
 import Home           from './pages/Home';
@@ -18,34 +18,34 @@ const IS_EXTENSION =
   !!chrome.runtime.id;
 
 function App() {
-  // The extension popup always uses HashRouter and renders only ExtensionPopup.
-  // The web app uses HashRouter too (for Vercel SPA compatibility) with full routes.
+  // Extension always uses HashRouter — extensions have no server to handle clean URLs.
   if (IS_EXTENSION) {
     return (
       <AuthProvider>
         <HashRouter>
           <Routes>
-            <Route path="/" element={<ExtensionPopup />} />
+            <Route path="/"        element={<ExtensionPopup />} />
             <Route path="/privacy" element={<Privacy />} />
-            <Route path="*" element={<ExtensionPopup />} />
+            <Route path="*"        element={<ExtensionPopup />} />
           </Routes>
         </HashRouter>
       </AuthProvider>
     );
   }
 
+  // Web app uses BrowserRouter — Vercel rewrites handle clean URLs via vercel.json.
   return (
     <AuthProvider>
-      <HashRouter>
+      <BrowserRouter>
         <Routes>
           <Route path="/"        element={<Login />}   />
           <Route path="/login"   element={<Login />}   />
           <Route path="/home"    element={<Home />}    />
           <Route path="/form"    element={<Form />}    />
           <Route path="/contact" element={<Contact />} />
-          <Route path="/privacy" element={<Privacy />} /> 
+          <Route path="/privacy" element={<Privacy />} />
         </Routes>
-      </HashRouter>
+      </BrowserRouter>
     </AuthProvider>
   );
 }
