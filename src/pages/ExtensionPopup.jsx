@@ -20,26 +20,55 @@ const CLOUDINARY_CLOUD_NAME   = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
 const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
 /* ══════════════════════════════════════════════════════
-   PROFILE FIELDS — shown in the compact in-popup form
+   PROFILE FIELDS — must match Form.jsx SECTIONS keys exactly
+   so the extension reads/writes the same Supabase columns.
 ══════════════════════════════════════════════════════ */
 const PROFILE_FIELDS = [
-  { key: "firstName",              label: "First Name",             placeholder: "Arjun",                  required: true  },
-  { key: "lastName",               label: "Last Name",              placeholder: "Sharma",                 required: true  },
-  { key: "email",                  label: "Email",                  placeholder: "arjun@gmail.com",        required: true, type: "email" },
-  { key: "phone",                  label: "Phone",                  placeholder: "+91 98765 43210",        required: true  },
-  { key: "gender",                 label: "Gender",                 placeholder: "",                       required: false, select: ["Male", "Female", "Non-binary", "Prefer not to say"] },
-  { key: "location",               label: "Location / City",        placeholder: "Jaipur, Rajasthan",      required: false },
-  { key: "collegeName",            label: "College / University",   placeholder: "JECRC University",       required: true  },
-  { key: "degreeName",             label: "Degree / Program",       placeholder: "B.Tech CS",              required: false },
-  { key: "year",                   label: "Current Year",           placeholder: "3rd Year",               required: false },
-  { key: "expectedGraduationYear", label: "Grad Year",              placeholder: "2026",                   required: false },
-  { key: "rollNumber",             label: "Roll Number",            placeholder: "21EJCCS001",             required: false },
-  { key: "skills",                 label: "Skills",                 placeholder: "React, Node, Python",    required: false },
-  { key: "linkedin",               label: "LinkedIn URL",           placeholder: "linkedin.com/in/...",    required: false },
-  { key: "github",                 label: "GitHub URL",             placeholder: "github.com/...",         required: false },
-  { key: "bio",                    label: "About You",              placeholder: "Short bio…",             required: false, textarea: true },
+  // ── Personal ──
+  { key: "firstName",   label: "First Name",      placeholder: "Arjun",              required: true  },
+  { key: "lastName",    label: "Last Name",        placeholder: "Sharma",             required: true  },
+  { key: "gender",      label: "Gender",           placeholder: "",                   required: false, select: ["Male", "Female", "Non-binary", "Prefer not to say"] },
+  { key: "dob",         label: "Date of Birth",    placeholder: "",                   required: false, type: "date" },
+  { key: "nationality", label: "Nationality",      placeholder: "Indian",             required: false },
+  { key: "language",    label: "Languages Known",  placeholder: "Hindi, English",     required: false },
+  { key: "category",    label: "Category",         placeholder: "",                   required: false, select: ["General", "OBC", "SC", "ST", "EWS", "Other"] },
+
+  // ── Address ──
+  { key: "addressLine1",  label: "Address Line 1",  placeholder: "123, MG Road",     required: false },
+  { key: "city",          label: "City",            placeholder: "Jaipur",           required: false },
+  { key: "state",         label: "State",           placeholder: "Rajasthan",        required: false },
+  { key: "pincode",       label: "PIN / ZIP Code",  placeholder: "302001",           required: false },
+  { key: "country",       label: "Country",         placeholder: "India",            required: false },
+
+  // ── Academic ──
+  { key: "collegeName",            label: "College / University",    placeholder: "JECRC University",        required: true  },
+  { key: "degreeName",             label: "Degree / Program",        placeholder: "B.Tech Computer Science", required: true  },
+  { key: "branch",                 label: "Branch / Specialization", placeholder: "Artificial Intelligence", required: false },
+  { key: "year",                   label: "Current Year",            placeholder: "",                        required: true,  select: ["1st Year", "2nd Year", "3rd Year", "4th Year", "5th Year", "Postgraduate"] },
+  { key: "expectedGraduationYear", label: "Graduation Year",         placeholder: "2026",                    required: true  },
+  { key: "rollNumber",             label: "Roll / Enrollment No.",   placeholder: "21EJCCS001",              required: false },
+  { key: "cgpa",                   label: "CGPA / Percentage",       placeholder: "8.5 / 85%",               required: false },
+  { key: "collegeEmail",           label: "College Email",           placeholder: "21ejccs001@jecrc.ac.in",  required: false, type: "email" },
+
+  // ── Professional ──
+  { key: "skills",         label: "Technical Skills",      placeholder: "React, Node.js, Python, SQL",        required: false },
+  { key: "softSkills",     label: "Soft Skills",           placeholder: "Leadership, Communication",          required: false },
+  { key: "currentRole",    label: "Current Role / Title",  placeholder: "Full Stack Developer Intern",        required: false },
+  { key: "currentCompany", label: "Current Company",       placeholder: "XYZ Technologies",                  required: false },
+  { key: "totalExpYears",  label: "Total Experience",      placeholder: "1.5 years",                         required: false },
+  { key: "projects",       label: "Notable Projects",      placeholder: "Fillux — form autofill Chrome ext…", required: false, textarea: true },
+  { key: "bio",            label: "Short Bio / About",     placeholder: "2–3 lines about yourself…",         required: false, textarea: true },
+
+  // ── Social ──
+  { key: "linkedin",  label: "LinkedIn URL",          placeholder: "linkedin.com/in/arjun-sharma", required: false },
+  { key: "github",    label: "GitHub URL",            placeholder: "github.com/arjunsharma",       required: false },
+  { key: "portfolio", label: "Portfolio / Website",   placeholder: "arjunsharma.dev",              required: false },
+  { key: "leetcode",  label: "LeetCode / Codeforces", placeholder: "leetcode.com/u/arjun",         required: false },
+  { key: "devpost",   label: "Devpost / Devfolio",    placeholder: "devpost.com/arjun",            required: false },
+  { key: "twitter",   label: "X / Twitter",           placeholder: "x.com/arjunsharma",            required: false },
 ];
 
+/* Flat empty object covering every field key */
 const EMPTY = PROFILE_FIELDS.reduce((a, f) => { a[f.key] = ""; return a; }, {});
 
 /* ══════════════════════════════════════════════════════
@@ -333,7 +362,15 @@ export default function ExtensionPopup() {
           .single();
         if (data) {
           setProfile(data);
+          // Merge in all matching keys from the saved profile
           setProfData(prev => ({ ...prev, ...data }));
+          // website saves arrays; popup works with single values
+          if (!data.email && data.emails?.length) {
+            setProfData(prev => ({ ...prev, email: data.emails[0] }));
+          }
+          if (!data.phone && data.phones?.length) {
+            setProfData(prev => ({ ...prev, phone: data.phones[0] }));
+          }
           if (data.resumeURL) setResumeURL(data.resumeURL);
           if (data.yesNoFields) setYesNoFields(prev => ({ ...prev, ...data.yesNoFields }));
           setView("ready");
@@ -383,8 +420,8 @@ export default function ExtensionPopup() {
 
   /* ── Profile save ── */
   const handleSaveProfile = async () => {
-    if (!profData.firstName || !profData.email) {
-      setProfErr("First name and email are required.");
+    if (!profData.firstName || !profData.email || !profData.phone) {
+      setProfErr("First name, email and phone are required.");
       return;
     }
     if (!termsAccepted) {
@@ -421,7 +458,11 @@ export default function ExtensionPopup() {
         resumeURL: finalResumeURL || "",
         termsAccepted: true,
         uid,
+        // keep both flat and array forms so website Form.jsx stays in sync
         email,
+        emails: [email].filter(Boolean),
+        phone: profData.phone || "",
+        phones: [profData.phone].filter(Boolean),
         updatedAt: new Date().toISOString(),
       };
 
@@ -607,6 +648,16 @@ export default function ExtensionPopup() {
 
           {/* Scrollable fields */}
           <div style={{ flex: 1, overflowY: "auto", padding: "0.5rem 1rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+
+          {/* ── Email & Phone (always needed, not in PROFILE_FIELDS sections above) ── */}
+            <div>
+              <FieldLabel required>Email</FieldLabel>
+              <FieldInput field={{ placeholder: "arjun@gmail.com", type: "email" }} value={profData.email || ""} onChange={e => { setProfData(p => ({ ...p, email: e.target.value })); setProfErr(""); }} />
+            </div>
+            <div>
+              <FieldLabel required>Phone</FieldLabel>
+              <FieldInput field={{ placeholder: "+91 98765 43210" }} value={profData.phone || ""} onChange={e => { setProfData(p => ({ ...p, phone: e.target.value })); setProfErr(""); }} />
+            </div>
 
             {/* ── Standard text / select fields ── */}
             {PROFILE_FIELDS.map(field => (

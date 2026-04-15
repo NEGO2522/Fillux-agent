@@ -110,7 +110,7 @@ VITE_CLOUDINARY_UPLOAD_PRESET=your_upload_preset
 npm run dev
 ```
 
-Visit `http://localhost:5173` in your browser.
+Visit `http://localhost:5175` in your browser.
 
 ### 5. Build for Production
 

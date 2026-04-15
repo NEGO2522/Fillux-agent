@@ -9,6 +9,9 @@ const isExtension = process.env.VITE_BUILD_TARGET === 'extension';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  server: {
+    port: 5175,
+  },
   base: isExtension ? './' : '/',
   build: {
     outDir: 'dist',
